@@ -125,7 +125,7 @@ def init_weights(shape, init_method='xavier', xavier_params = (None, None)):
 the_model = None
 the_model_2 = None
 
-# tes
+# test
 
 def model_with_one_layer(X, num_hidden=10):
     global the_model

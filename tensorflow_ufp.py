@@ -1,15 +1,13 @@
 # coding: utf-8
 
-# ### Code to accompany post [Universal Function Approximation using TensorFlow]
+# derived from [Universal Function Approximation Using TensorFlow]
 # (http://deliprao.com/archives/100)
 
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.pylab
 import drawnow
 
-from tqdm import tqdm
 
 # A $40\times{40}$ network with two hidden layers gets to MSE $1.17$ after
 # $2,300$ epochs, and never gets better. A network with one hidden layer of
@@ -17,7 +15,7 @@ from tqdm import tqdm
 # The $40\times{40}$ network achieves MSE $1.32$ somewhere between $1,000$ and
 # $1,100$ epochs, when it is still improving rapidly toward $2,300$ epochs.
 
-# ### Find out about environments
+# ### Find out about Python environments
 
 # The following is not a reliable method, and doesn't port to Python 2.7, nor
 # (possibly) in every sub-version of Python 3. It's really here just to tell us
@@ -25,6 +23,7 @@ from tqdm import tqdm
 # packages and need to troubleshoot the environment. See https://goo.gl/EXq7pE.
 # This gets complicated with Anaconda and Jupyter, which have their own
 # conventions for environments that may not match PyCharm's
+
 
 import sys
 import os
@@ -58,9 +57,19 @@ print_environment()
 # 1500, whereas, 20 x 20 achieves only 2.03.
 
 
-np.random.seed(1000) # for repro
+np.random.seed(1000)  # for repro
+
 
 function_to_learn = lambda x: np.sin(x) + 0.1 * np.random.randn(*x.shape)
+
+function_to_learn = lambda x: (np.sin(x - 0.25)
+                              + 0.66 * np.cos(1.618 * x)
+                              + 0.05 * np.random.randn(*x.shape)
+)
+
+from numpy.polynomial.chebyshev import chebval
+# TODO does a TERRIBLE job of fitting this
+# function_to_learn = lambda x: chebval(x, np.random.random_sample(2))
 
 # for the 1-layer network
 NUM_HIDDEN_NODES = 40
@@ -69,15 +78,16 @@ NUM_HIDDEN_NODES = 40
 NUM_NODES_LAYER_1 = 40
 NUM_NODES_LAYER_2 = 40
 
-# hyperparameters same for both (refactoring them into function parameters is
-#  in progress)
+# hyperparameters same for both
+# TODO refactor into function parameters
+
 NUM_EXAMPLES      =  1000
 TRAIN_SPLIT       =  0.80
 MINI_BATCH_SIZE   =   100
 PLOT_INTERVAL     =  1000
 PLOT_PAUSE        =  0.10
 DRAWNOW_INTERVAL  =   100
-NUM_EPOCHS        =  6000
+NUM_EPOCHS        =  3000
 
 
 def uniform_scrambled_col_vec(left, right, dim):
@@ -171,11 +181,11 @@ def model_with_two_layers(X, num_h1=10, num_h2=10):
     return the_model_2
 
 
-yhat = model_with_one_layer(X, NUM_HIDDEN_NODES)
+yhat   = model_with_one_layer(X, NUM_HIDDEN_NODES)
 yhat_2 = model_with_two_layers(X, NUM_NODES_LAYER_1, NUM_NODES_LAYER_2)
 
 
-train_op = tf.train.AdamOptimizer().minimize(tf.nn.l2_loss(yhat - Y))
+train_op   = tf.train.AdamOptimizer().minimize(tf.nn.l2_loss(yhat - Y))
 train_op_2 = tf.train.AdamOptimizer().minimize(tf.nn.l2_loss(yhat_2 - Y))
 
 
@@ -187,6 +197,7 @@ errors = None
 
 
 def make_fig():
+    """This is a thunk, the required form of argument for drawnow."""
     global validx, validy, result
     plt.scatter(validx, validy, c='green', label='validation')
     plt.scatter(validx, result, c='red', label='eval(validx)')
@@ -197,7 +208,7 @@ def two_layer_drawnow_session(fignum):
     global errors, mse, validx, validy, result
     plt.ion()
     errors = []
-    the_fig = plt.figure(fignum)
+    plt.figure(fignum)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for i in range(NUM_EPOCHS):
@@ -226,7 +237,6 @@ def two_layer_drawnow_session(fignum):
 
 
 fignum = two_layer_drawnow_session(fignum)
-two_layer_summary()
 
 
 def two_layer_session():
@@ -258,20 +268,15 @@ def two_layer_session():
                 print(f"epoch {i}, validation MSE {mse:6.2f}")
 
 
-# two_layer_session()
-
-
 def two_layer_summary():
     global fignum, errors
     plt.figure(fignum)
-    fignum += 1
     plt.xlabel('#epochs')
     plt.ylabel('MSE')
     plt.semilogy(errors)
-    plt.pause(PLOT_PAUSE)  # plt.show(block=False)
 
 
-# two_layer_summary()
+drawnow.drawnow(two_layer_summary, confirm=True)
 
 
 def one_layer_session():
@@ -313,5 +318,3 @@ def one_layer_summary():
 
 # one_layer_summary()
 
-# show all figures that might have been waiting
-# matplotlib.pylab.show()

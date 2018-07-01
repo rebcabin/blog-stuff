@@ -103,6 +103,31 @@ class ReluActivationFunction(ActivationFunction):
         super().__init__(relu, d_relu)
 
 
+def sigmoid(x):
+    return 1.0 / (1.0 - np.exp(-x))
+
+
+def d_sigmoid(x):
+    output = sigmoid(x)
+    result = output * (1 - output)
+    return result
+
+
+class SigmoidActivationFunction(ActivationFunction):
+
+    def __init__(self):
+        super().__init__(sigmoid, d_sigmoid)
+
+
+class LinearActivationnFunction(ActivationFunction):
+
+    def __init__(self):
+        super().__init__(
+            output = lambda x: x,
+            der = lambda _: 1
+        )
+
+
 # Regularization
 
 
@@ -223,7 +248,7 @@ class Link(object):
         self.regularization = regularization
 
 
-# Build Network
+# Build and Operate the Network
 
 
 def build_network(network_shape: List[int],
@@ -303,7 +328,8 @@ def forward_prop(network: List[List[Node]], inputs: List[float]) -> float:
     return network[len(network) - 1][0].output
 
 
-def back_prop(network: List[List[Node]], target: float,
+def back_prop(network: List[List[Node]],
+              target: float,
               error_func: ErrorFunction):
     """ Runs a backward propagation using the provided target and the
     computed output of the previous call to forward propagation.
@@ -353,7 +379,8 @@ def back_prop(network: List[List[Node]], target: float,
                 node.output_der += output.weight * output.dest.input_der
 
 
-def update_weights(network: List[List[Node]], learning_rate: float,
+def update_weights(network: List[List[Node]],
+                   learning_rate: float,
                    regularization_rate: float):
     """Updates the weights of the network using the previously accumulated
     error derivatives."""

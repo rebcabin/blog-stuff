@@ -5,6 +5,17 @@ import pytest
 import matplotlib.pyplot as plt
 from typing import List, Any, Callable
 
+
+#  __  __   _   ___ ___ _____   _____   _____ ___  ___   ___
+# |  \/  | /_\ / __/ __|_ _\ \ / / __| |_   _/ _ \|   \ / _ \
+# | |\/| |/ _ \\__ \__ \| | \ V /| _|    | || (_) | |) | (_) |
+# |_|  |_/_/ \_\___/___/___| \_/ |___|   |_| \___/|___/ \___/
+
+
+# TODO: optimize with numpy. Almost everything in here is wicked slow.
+# TODO: it's a straight port from TypeScript to ensure we get it right.
+
+
 #   ___             _            _
 #  / __|___ _ _  __| |_ __ _ _ _| |_ ___
 # | (__/ _ \ ' \(_-<  _/ _` | ' \  _(_-<
@@ -42,9 +53,109 @@ def shuffle(xs: List[Any]):
     np.random.shuffle(xs)
 
 
+np.random.seed(42)  # for reproducibility
+
+
 @pytest.fixture
 def num_examples():
     return NUM_EXAMPLES
+
+
+def classify_two_gauss_data(
+        num_examples: int,
+        noise_variance: float) -> Example2D:
+
+    variance_scale = 1.0  # a d3 thing from TypeScript; not needed here
+    variance = noise_variance * variance_scale
+    std = np.sqrt(variance)
+    points = []  # eventually return [Example2D]
+
+    def gen_gauss(mu_x: float, mu_y: float, label: float) -> None:
+        x = np.random.randn(1)[0] * std  +  mu_x
+        y = np.random.randn(1)[0] * std  +  mu_y
+        points.append(Example2D(x, y, label))
+
+    gen_gauss(2, 2, 1)
+    gen_gauss(-2, -2, 1)
+
+    return points
+
+
+def regress_plane(
+        num_examples: int,
+        noise_variance: float) -> List[Example2D]:
+    """TODO: noise model is wrong."""
+    radius = 6
+    # label_scale from original is a d3 thing; not needed here
+    points = []  # eventually a List[Example2D]
+    std = np.sqrt(noise_variance)
+
+    def lr():
+        return np.random.random() * 2 * radius - radius
+
+    for _ in range(num_examples):
+        x = lr()
+        y = lr()
+        noise_x = lr() * std
+        noise_y = lr() * std
+        label = x + noise_x + y + noise_y
+        points.append(Example2D(x, y, label))
+
+    return points
+
+
+def regress_gaussian(
+        num_examples: int,
+        noise_variance: float) -> List[Example2D]:
+    pass  # TODO
+
+
+def classify_circle_data(
+        num_examples: int,
+        noise: float) -> List[Example2D]:
+    """TODO: noise model is wrong."""
+    radius = 5
+    # label_scale from original is a d3 thing; not needed here
+    points = []  # eventually a List[Example2D]
+
+    def euclidean_distance(p1: Point, p2: Point) -> float:
+        """TODO: optimize with numpy"""
+        x2 = (p2.x - p1.x) ** 2
+        y2 = (p2.y - p1.y) ** 2
+        result = np.sqrt(x2 + y2)
+        return result
+
+    def get_circle_label(p: Point, center: Point) -> int:
+        d = euclidean_distance(p, center)
+        result = 1 if d < radius * 0.5 else -1
+        return result
+
+    def lr():
+        return np.random.random() * 2 * radius - radius
+
+    origin = Point(0, 0)
+
+    def make_points(inner_radial_fraction, outer_radial_fraction):
+        for _ in range(int(num_examples / 2)):
+            # consider fuzzing the radius | angle instead of x and y
+            d = outer_radial_fraction - inner_radial_fraction
+            r = radius * (np.random.random() * d + inner_radial_fraction)
+            a = np.random.random() * 2 * np.pi
+            x = r * np.sin(a) # Huh? usually cos
+            y = r * np.cos(a)
+            noise_x = lr() * noise
+            noise_y = lr() * noise
+            label = get_circle_label(
+                Point(x + noise_x, y + noise_y),
+                origin)
+            points.append(Example2D(x, y, label))
+
+    # Positive labels inside the circle
+    make_points(0.0, 0.5)
+    # Negative labels outside the circle
+    make_points(0.7, 1.0)
+
+    return points
 
 
 def uniform_scrambled_col_vec(left, right, dim):
@@ -63,6 +174,37 @@ def make_data_sets(xs, func, num_examples, train_split):
 # |  _/ / _ \  _|  _| | ' \/ _` |
 # |_| |_\___/\__|\__|_|_||_\__, |
 #                          |___/
+
+
+# PyCharm unnecessarily greys-out the following import.
+# This import is necessary lest "projection='3d'" be unknown below
+from mpl_toolkits.mplot3d import Axes3D
+
+
+def draw_2D_points(points: List[Example2D]) -> None:
+    xs = [p.x for p in points]
+    ys = [p.y for p in points]
+    zs = [p.label for p in points]
+    cs = ['r' if p.label > 0 else 'b' for p in points]
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    # the 'c=' is necessary lest 'cs' be ignored.
+    ax.scatter(xs, ys, zs, c=cs)
+    plt.pause(3.0)
+    # plt.show()
+
+
+@pytest.mark.skip('at present, not needed')
+def test_draw_regress_plane(num_examples):
+    """TODO: noise model is wrong."""
+    draw_2D_points(regress_plane(num_examples, noise_variance=1.0))
+
+
+def test_draw_classify_circle_data(num_examples):
+    #  See this line in 'playground.ts'
+    #  Secret magic scaling of state.noise
+    #   let data = generator(numSamples, state.noise / 100);
+    draw_2D_points(classify_circle_data(num_examples, noise=0.25))
 
 
 @pytest.mark.skip('preserve this sample')

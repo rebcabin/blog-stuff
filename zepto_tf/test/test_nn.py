@@ -3,7 +3,7 @@ import numpy as np
 import unittest
 import pytest
 import matplotlib.pyplot as plt
-from typing import List, Any, Callable
+from typing import List, Tuple, Dict, Any, Callable
 
 
 #  __  __   _   ___ ___ _____   _____   _____ ___  ___   ___
@@ -22,10 +22,13 @@ from typing import List, Any, Callable
 #  \___\___/_||_/__/\__\__,_|_||_\__/__/
 
 
-NUM_EXAMPLES      =  1000
-TRAIN_SPLIT       =  0.80
-PLOT_PAUSE        =  0.10
-DRAWNOW_INTERVAL  =   100
+NUM_EXAMPLES        =   300
+TRAIN_SPLIT         =  0.50
+PLOT_PAUSE          =  0.10
+DRAWNOW_INTERVAL    =   100
+BATCH_SIZE          =    10
+LEARNING_RATE       = 0.001
+REGULARIZATION_RATE =  0.01
 
 
 #  ___       _          ___      _
@@ -113,13 +116,12 @@ def regress_gaussian(
 def classify_circle_data(
         num_examples: int,
         noise: float) -> List[Example2D]:
-    """TODO: noise model is wrong."""
+
     radius = 5
     # label_scale from original is a d3 thing; not needed here
     points = []  # eventually a List[Example2D]
 
     def euclidean_distance(p1: Point, p2: Point) -> float:
-        """TODO: optimize with numpy"""
         x2 = (p2.x - p1.x) ** 2
         y2 = (p2.y - p1.y) ** 2
         result = np.sqrt(x2 + y2)
@@ -158,6 +160,14 @@ def classify_circle_data(
     return points
 
 
+def classify_circle_train_test_split(
+        num_examples: int,
+        data: List[Example2D]) -> Tuple[List[Example2D]]:
+    split = int(num_examples * TRAIN_SPLIT)
+    result = (data[:split], data[split:])
+    return result
+
+
 def uniform_scrambled_col_vec(left, right, dim):
     return np.random.uniform(left, right, (1, dim)).T
 
@@ -169,6 +179,7 @@ def make_data_sets(xs, func, num_examples, train_split):
     return trainx, func(trainx), validx, func(validx)
 
 
+
 #  ___ _     _   _   _
 # | _ \ |___| |_| |_(_)_ _  __ _
 # |  _/ / _ \  _|  _| | ' \/ _` |
@@ -177,7 +188,7 @@ def make_data_sets(xs, func, num_examples, train_split):
 
 
 # PyCharm unnecessarily greys-out the following import.
-# This import is necessary lest "projection='3d'" be unknown below
+# This import is necessary lest "projection='3d'" be unknown below.
 from mpl_toolkits.mplot3d import Axes3D
 
 
@@ -190,21 +201,22 @@ def draw_2D_points(points: List[Example2D]) -> None:
     ax = fig.add_subplot(111, projection='3d')
     # the 'c=' is necessary lest 'cs' be ignored.
     ax.scatter(xs, ys, zs, c=cs)
-    plt.pause(3.0)
+    plt.pause(PLOT_PAUSE)
     # plt.show()
+
+
+@pytest.mark.parametrize("noise", [0.10, 0.25, 0.50, 0.75, 1.0])
+def test_draw_classify_circle_data(num_examples, noise):
+    # See the following line in 'playground.ts': secret magic scaling of state.noise
+    #   let data = generator(numSamples, state.noise / 100);
+    # We won't do that; we'll just let the noise be a number in units of the radius
+    draw_2D_points(classify_circle_data(num_examples, noise))
 
 
 @pytest.mark.skip('at present, not needed')
 def test_draw_regress_plane(num_examples):
     """TODO: noise model is wrong."""
     draw_2D_points(regress_plane(num_examples, noise_variance=1.0))
-
-
-def test_draw_classify_circle_data(num_examples):
-    #  See this line in 'playground.ts'
-    #  Secret magic scaling of state.noise
-    #   let data = generator(numSamples, state.noise / 100);
-    draw_2D_points(classify_circle_data(num_examples, noise=0.25))
 
 
 @pytest.mark.skip('preserve this sample')
@@ -235,6 +247,7 @@ def test_draw_anything_at_all(num_examples):
 
 @pytest.mark.skip("animation sample")
 class TestAnimation(object):
+    """TODO: This is slow. Why?"""
 
     def init(self):
         self.ax.set_xlim(0, 2 * np.pi)
@@ -255,8 +268,8 @@ class TestAnimation(object):
         from matplotlib.animation import FuncAnimation
 
         must_have_a_variable_here = FuncAnimation(
-            self.fig,
-            self.update,
+            fig=self.fig,
+            func=self.update,
             frames=np.linspace(0, 2 * np.pi, 128),
             init_func=self.init,
             blit=True)
@@ -264,8 +277,8 @@ class TestAnimation(object):
         plt.pause(3.0)
 
 
-@pytest.mark.skip("another animation sample")
-class TestAnotherAnimation(object):
+@pytest.mark.skip("sine wave animation sample")
+class TestSineWaveAnimation(object):
 
     @staticmethod
     def data_gen(t=0):
@@ -315,6 +328,7 @@ class TestAnotherAnimation(object):
             init_func=self.init
         )
         plt.pause(3.0)
+        # plt.show()
 
 
 #    _      _   _          _   _
@@ -344,7 +358,8 @@ def test_regularization_function():
 # |_|\_\___|\__|\_/\_/\___/_| |_\_\
 
 
-def test_build_network():
+@pytest.fixture
+def a_network():
     nodes = nn.build_network(
         network_shape=[2, 3, 2],
         activation=nn.ReluActivationFunction,
@@ -353,7 +368,102 @@ def test_build_network():
         input_ids=['x1', 'x2'],
         init_zero_q=True,
     )
-    assert nodes is not None
+    return nodes
+
+
+@pytest.fixture
+def some_classify_circle_data():
+    """TODO: Parametrize noise."""
+    data = classify_circle_data(num_examples, noise=0.25)
+    result = classify_circle_train_test_split(num_examples, data)
+    return result
+
+
+def test_build_network(a_network):
+    assert a_network is not None
+
+
+def get_loss(network: List[List[nn.Node]], data: List[Example2D]) -> float:
+    temp = 0
+    ef = nn.SquareErrorFunction()
+    for d in data:
+        output = nn.forward_prop(nn, [d.x, d.y])
+        temp += ef.error(output, d.label)
+    result = temp / len(data)
+    return result
+
+
+def classify_circle_train_one_step(network: List[List[nn.Node]],
+                                   train_data: List[Example2D],
+                                   test_data: List[Example2D]) -> Dict:
+    i = 0
+    l = len(train_data)
+    for d in train_data:
+        nn.forward_prop(network, [d.x, d.y])
+        nn.back_prop(network, d.label, nn.SquareErrorFunction())
+        i += 1
+        if i % BATCH_SIZE == 0 or i == l:
+            nn.update_weights(network, LEARNING_RATE, REGULARIZATION_RATE)
+    result = {'traning loss': get_loss(network, train_data),
+              'testing lost': get_loss(network, test_data)}
+    return result
+
+
+from functools import partial
+
+
+# @pytest.mark.skip("network loss animation")
+class TestNetworkLossAnimation(object):
+
+    def data_gen(selfk, network, t=0):
+        cnt = 0
+        while cnt < 1000:
+            cnt += 1
+            t += 0.1
+            n = network
+            yield t, np.sin(2 * np.pi * t) * np.exp(-t / 10.)
+
+    def init(self):
+        self.ax.set_ylim(-1.1, 1.1)
+        self.ax.set_xlim(0, 10)
+        del self.xdata[:]
+        del self.ydata[:]
+        self.line.set_data(self.xdata, self.ydata)
+        return self.line,  # singleton tuple
+
+    def run(self, data):
+        # update the data
+        t, y = data
+        self.xdata.append(t)
+        self.ydata.append(y)
+        xmin, xmax = self.ax.get_xlim()
+
+        if t >= xmax:
+            self.ax.set_xlim(xmin, 2 * xmax)
+            self.ax.figure.canvas.draw()
+        self.line.set_data(self.xdata, self.ydata)
+
+        return self.line,
+
+    def test_another_animation(self, a_network):
+        import matplotlib.animation as animation
+        self.fig, self.ax = plt.subplots()
+        self.xdata, self.ydata = [], []
+        self.line, = self.ax.plot([], [], lw=2)
+        self.ax.grid()
+
+        # Must assign result to a variable lest nothing shows
+        ani = animation.FuncAnimation(
+            fig=self.fig,
+            func=self.run,
+            frames=partial(self.data_gen, a_network),
+            blit=False,
+            interval=10,
+            repeat=False,
+            init_func=self.init
+        )
+        plt.pause(3.0)
+        # plt.show()
 
 
 #  ___     _____       _     ___                  _

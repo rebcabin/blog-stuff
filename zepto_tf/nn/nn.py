@@ -29,7 +29,10 @@ def testable() -> bool:
     return True
 
 
-# Error
+#  ___                 ___             _   _
+# | __|_ _ _ _ ___ _ _| __|  _ _ _  __| |_(_)___ _ _
+# | _|| '_| '_/ _ \ '_| _| || | ' \/ _|  _| / _ \ ' \
+# |___|_| |_| \___/_| |_| \_,_|_||_\__|\__|_\___/_||_|
 
 
 def square_error(output: float, target: float) -> float:
@@ -58,7 +61,19 @@ class SquareErrorFunction(ErrorFunction):
         super().__init__(square_error, square_error_der)
 
 
-# Activation
+#    _      _   _          _   _          ___             _   _
+#   /_\  __| |_(_)_ ____ _| |_(_)___ _ _ | __|  _ _ _  __| |_(_)___ _ _
+#  / _ \/ _|  _| \ V / _` |  _| / _ \ ' \| _| || | ' \/ _|  _| / _ \ ' \
+# /_/ \_\__|\__|_|\_/\__,_|\__|_\___/_||_|_| \_,_|_||_\__|\__|_\___/_||_|
+
+
+class ActivationFunction(object):
+
+    def __init__(self,
+                 output: Callable[[float], float],
+                 der: Callable[[float], float]):
+        self.output = output
+        self.der = der
 
 
 def tanh(x: float) -> float:
@@ -72,6 +87,12 @@ def d_tanh(x: float) -> float:
     return result
 
 
+class TanhActivationFunction(ActivationFunction):
+
+    def __init__(self):
+        super().__init__(tanh, d_tanh)
+
+
 def relu(x: float) -> float:
     result = np.max([0, x])
     return result
@@ -80,21 +101,6 @@ def relu(x: float) -> float:
 def d_relu(x: float) -> float:
     result = 0 if x <= 0 else 1
     return result
-
-
-class ActivationFunction(object):
-
-    def __init__(self,
-                 output: Callable[[float], float],
-                 der: Callable[[float], float]):
-        self.output = output
-        self.der = der
-
-
-class TanhActivationFunction(ActivationFunction):
-
-    def __init__(self):
-        super().__init__(tanh, d_tanh)
 
 
 class ReluActivationFunction(ActivationFunction):
@@ -128,7 +134,20 @@ class LinearActivationnFunction(ActivationFunction):
         )
 
 
-# Regularization
+#  ___               _          _         _   _
+# | _ \___ __ _ _  _| |__ _ _ _(_)_____ _| |_(_)___ _ _
+# |   / -_) _` | || | / _` | '_| |_ / _` |  _| / _ \ ' \
+# |_|_\___\__, |\_,_|_\__,_|_| |_/__\__,_|\__|_\___/_||_|
+#         |___/
+
+
+class RegularizationFunction(object):
+
+    def __init__(self,
+                 output: Callable[[float], float],
+                 der: Callable[[float], float]):
+        self.output = output
+        self.der = der
 
 
 def l1(x: float) -> float:
@@ -146,6 +165,12 @@ def d_l1(x: float) -> float:
     return result
 
 
+class L1RegularizationFunction(RegularizationFunction):
+
+    def __init__(self):
+        super().__init__(l1, d_l1)
+
+
 def l2(x: float) -> float:
     result = 0.5 * x * x
     return result
@@ -155,28 +180,16 @@ def d_l2(x: float) -> float:
     return x
 
 
-class RegularizationFunction(object):
-
-    def __init__(self,
-                 output: Callable[[float], float],
-                 der: Callable[[float], float]):
-        self.output = output
-        self.der = der
-
-
-class L1RegularizationFunction(RegularizationFunction):
-
-    def __init__(self):
-        super().__init__(l1, d_l1)
-
-
 class L2RegularizationFunction(RegularizationFunction):
 
     def __init__(self):
         super().__init__(l2, d_l2)
 
 
-# Node
+#  _  _         _
+# | \| |___  __| |___
+# | .` / _ \/ _` / -_)
+# |_|\_\___/\__,_\___|
 
 
 class Node(object):
@@ -219,7 +232,10 @@ class Node(object):
         return result
 
 
-# Link
+#  _    _      _
+# | |  (_)_ _ | |__
+# | |__| | ' \| / /
+# |____|_|_||_|_\_\
 
 
 class Link(object):
@@ -248,7 +264,10 @@ class Link(object):
         self.regularization = regularization
 
 
-# Build and Operate the Network
+#  ___      _ _    _   _  _     _                  _
+# | _ )_  _(_) |__| | | \| |___| |___ __ _____ _ _| |__
+# | _ \ || | | / _` | | .` / -_)  _\ V  V / _ \ '_| / /
+# |___/\_,_|_|_\__,_| |_|\_\___|\__|\_/\_/\___/_| |_\_\
 
 
 def build_network(network_shape: List[int],
@@ -302,6 +321,13 @@ def build_network(network_shape: List[int],
     return network
 
 
+#  ___                              _   _
+# | _ \_ _ ___ _ __  __ _ __ _ __ _| |_(_)___ _ _
+# |  _/ '_/ _ \ '_ \/ _` / _` / _` |  _| / _ \ ' \
+# |_| |_| \___/ .__/\__,_\__, \__,_|\__|_\___/_||_|
+#             |_|        |___/
+
+
 def forward_prop(network: List[List[Node]], inputs: List[float]) -> float:
     """ Runs a forward propagation of the input through the
     network. Modifies the internal state of the network - the
@@ -313,7 +339,7 @@ def forward_prop(network: List[List[Node]], inputs: List[float]) -> float:
     @return The final output of the network."""
     input_layer = network[0]
     if len(inputs) != len(input_layer):
-        raise TypeError(f"""Len inputs {len(inputs)} must match Len first 
+        raise TypeError(f"""Len inputs {len(inputs)} must match Len first
         layer of the network {len(input())}""")
     # Let the outputs of the input layer of nodes be the inputs given to this
     #  forward-prop function.
@@ -391,7 +417,8 @@ def update_weights(network: List[List[Node]],
             node = current_layer[i]
             if node.num_accumulated_ders > 0:
                 node.bias -= \
-                    learning_rate * node.acc_input_der / node.acc_input_der
+                    learning_rate * node.acc_input_der / \
+                        node.num_accumulated_ders
                 node.acc_input_der = 0
                 node.num_accumulated_ders = 0
             for j in range(len(node.input_links)):
@@ -404,10 +431,10 @@ def update_weights(network: List[List[Node]],
                 if link.num_accumulated_ders > 0:
                     link.weight -= \
                         (learning_rate / link.num_accumulated_ders) * \
-                        link.acc_error_der  # updated in 'backprop'
-                new_link_weight = link_weight - \
+                            link.acc_error_der  # updated in 'backprop'
+                new_link_weight = link.weight - \
                     (learning_rate * regularization_rate) * regul_der
-                if link.regularization.output is l1 and \
+                if link.regularization is L1RegularizationFunction and \
                         link.weight * new_link_weight < 0:
                     # The weight crossed 0 due to the regularization term. Set
                     #  it to 0 and kill the link.

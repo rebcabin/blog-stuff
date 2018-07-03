@@ -367,7 +367,7 @@ def a_network():
         output_activation=nn.ReluActivationFunction(),
         regularization=nn.L2RegularizationFunction(),
         input_ids=['x1', 'x2'],
-        init_zero_q=True,
+        init_zero_q=False,
     )
     return nodes
 
@@ -388,24 +388,27 @@ def get_loss(network: List[List[nn.Node]], data: List[Example2D]) -> float:
     temp = 0
     ef = nn.SquareErrorFunction()
     for d in data:
-        output = nn.forward_prop(nn, [d.x, d.y])
+        output = nn.forward_prop(network, [d.x, d.y])
         temp += ef.error(output, d.label)
     result = temp / len(data)
     return result
 
 
-def classify_circle_train_one_step(network: List[List[nn.Node]],
-                                   some_classify_circle_data) -> Dict:
+def classify_circle_train_one_step(
+        network: List[List[nn.Node]],
+        some_classify_circle_data) -> Dict:
+    training_data = some_classify_circle_data['training data']
+    testing_data = some_classify_circle_data['testing data']
+    l = len(training_data)
     i = 0
-    l = len(some_classify_circle_data['training data'])
-    for d in some_classify_circle_data['training data']:
+    for d in training_data:
         nn.forward_prop(network, [d.x, d.y])
         nn.back_prop(network, d.label, nn.SquareErrorFunction())
         i += 1
         if i % BATCH_SIZE == 0 or i == l:
             nn.update_weights(network, LEARNING_RATE, REGULARIZATION_RATE)
-    result = {'training loss': get_loss(network, train_data),
-              'testing lost': get_loss(network, test_data)}
+    result = {'training loss': get_loss(network, training_data),
+              'testing lost': get_loss(network, testing_data)}
     return result
 
 
@@ -420,9 +423,12 @@ class TestNetworkLossAnimation(object):
         while cnt < 1000:
             cnt += 1
             t += 0.1
-            losses = classify_circle_train_one_step(
-                network, some_classify_circle_data)
-            yield t, np.sin(2 * np.pi * t) * np.exp(-t / 10.)
+            losses = \
+                classify_circle_train_one_step(
+                    network,
+                    some_classify_circle_data)
+            # yield t, np.sin(2 * np.pi * t) * np.exp(-t / 10.)
+            yield t, losses['training loss']
 
     def init(self):
         self.ax.set_ylim(-1.1, 1.1)

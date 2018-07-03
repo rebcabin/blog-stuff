@@ -367,7 +367,7 @@ def a_network():
         output_activation=nn.ReluActivationFunction(),
         regularization=nn.L2RegularizationFunction(),
         input_ids=['x1', 'x2'],
-        init_zero_q=False,
+        init_zero_q=False,  # True ~~> no change in loss
     )
     return nodes
 
@@ -418,17 +418,16 @@ from functools import partial
 # @pytest.mark.skip("network loss animation")
 class TestNetworkLossAnimation(object):
 
-    def data_gen(selfk, network, some_classify_circle_data, t=0):
+    @staticmethod
+    def data_gen(network, data, t=0):
         cnt = 0
-        while cnt < 1000:
+        while cnt < 10000:
             cnt += 1
             t += 0.1
-            losses = \
-                classify_circle_train_one_step(
-                    network,
-                    some_classify_circle_data)
+            losses = classify_circle_train_one_step(network, data)
             # yield t, np.sin(2 * np.pi * t) * np.exp(-t / 10.)
-            yield t, losses['training loss']
+            yield t, np.log10(losses['training loss'])
+            # TODO: plot two lines!
 
     def init(self):
         self.ax.set_ylim(-1.1, 1.1)
@@ -439,17 +438,14 @@ class TestNetworkLossAnimation(object):
         return self.line,  # singleton tuple
 
     def run(self, data):
-        # update the data
         t, y = data
         self.xdata.append(t)
         self.ydata.append(y)
         xmin, xmax = self.ax.get_xlim()
-
         if t >= xmax:
             self.ax.set_xlim(xmin, 2 * xmax)
             self.ax.figure.canvas.draw()
         self.line.set_data(self.xdata, self.ydata)
-
         return self.line,
 
     def test_another_animation(self, a_network, some_classify_circle_data):
@@ -458,9 +454,7 @@ class TestNetworkLossAnimation(object):
         self.xdata, self.ydata = [], []
         self.line, = self.ax.plot([], [], lw=2)
         self.ax.grid()
-
-        # Must assign result to a variable lest nothing shows
-        ani = animation.FuncAnimation(
+        _ = animation.FuncAnimation(  # must assign result to a var
             fig=self.fig,
             func=self.run,
             frames=partial(self.data_gen, a_network, some_classify_circle_data),
@@ -469,8 +463,8 @@ class TestNetworkLossAnimation(object):
             repeat=False,
             init_func=self.init
         )
-        plt.pause(3.0)
-        # plt.show()
+        # plt.pause(3.0)
+        plt.show()
 
 
 #  ___     _____       _     ___                  _

@@ -73,7 +73,7 @@ def d_tanh(x: float) -> float:
 
 
 def relu(x: float) -> float:
-    result = np.max(0, x)
+    result = np.max([0, x])
     return result
 
 
@@ -325,7 +325,8 @@ def forward_prop(network: List[List[Node]], inputs: List[float]) -> float:
         for i in range(len(current_layer)):
             node = current_layer[i]
             node.update_output()  # memoize in the output
-    return network[len(network) - 1][0].output
+    result = network[len(network) - 1][0].output
+    return result
 
 
 def back_prop(network: List[List[Node]],

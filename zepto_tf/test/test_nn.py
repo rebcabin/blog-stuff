@@ -162,9 +162,10 @@ def classify_circle_data(
 
 def classify_circle_train_test_split(
         num_examples: int,
-        data: List[Example2D]) -> Tuple[List[Example2D]]:
+        data: List[Example2D]) -> Dict:
     split = int(num_examples * TRAIN_SPLIT)
-    result = (data[:split], data[split:])
+    result = {'training data': data[:split],
+              'testing data': data[split:]}
     return result
 
 
@@ -362,9 +363,9 @@ def test_regularization_function():
 def a_network():
     nodes = nn.build_network(
         network_shape=[2, 3, 2],
-        activation=nn.ReluActivationFunction,
-        output_activation=nn.ReluActivationFunction,
-        regularization=nn.L2RegularizationFunction,
+        activation=nn.ReluActivationFunction(),
+        output_activation=nn.ReluActivationFunction(),
+        regularization=nn.L2RegularizationFunction(),
         input_ids=['x1', 'x2'],
         init_zero_q=True,
     )
@@ -372,7 +373,7 @@ def a_network():
 
 
 @pytest.fixture
-def some_classify_circle_data():
+def some_classify_circle_data(num_examples):
     """TODO: Parametrize noise."""
     data = classify_circle_data(num_examples, noise=0.25)
     result = classify_circle_train_test_split(num_examples, data)
@@ -394,17 +395,16 @@ def get_loss(network: List[List[nn.Node]], data: List[Example2D]) -> float:
 
 
 def classify_circle_train_one_step(network: List[List[nn.Node]],
-                                   train_data: List[Example2D],
-                                   test_data: List[Example2D]) -> Dict:
+                                   some_classify_circle_data) -> Dict:
     i = 0
-    l = len(train_data)
-    for d in train_data:
+    l = len(some_classify_circle_data['training data'])
+    for d in some_classify_circle_data['training data']:
         nn.forward_prop(network, [d.x, d.y])
         nn.back_prop(network, d.label, nn.SquareErrorFunction())
         i += 1
         if i % BATCH_SIZE == 0 or i == l:
             nn.update_weights(network, LEARNING_RATE, REGULARIZATION_RATE)
-    result = {'traning loss': get_loss(network, train_data),
+    result = {'training loss': get_loss(network, train_data),
               'testing lost': get_loss(network, test_data)}
     return result
 
@@ -415,12 +415,13 @@ from functools import partial
 # @pytest.mark.skip("network loss animation")
 class TestNetworkLossAnimation(object):
 
-    def data_gen(selfk, network, t=0):
+    def data_gen(selfk, network, some_classify_circle_data, t=0):
         cnt = 0
         while cnt < 1000:
             cnt += 1
             t += 0.1
-            n = network
+            losses = classify_circle_train_one_step(
+                network, some_classify_circle_data)
             yield t, np.sin(2 * np.pi * t) * np.exp(-t / 10.)
 
     def init(self):
@@ -445,7 +446,7 @@ class TestNetworkLossAnimation(object):
 
         return self.line,
 
-    def test_another_animation(self, a_network):
+    def test_another_animation(self, a_network, some_classify_circle_data):
         import matplotlib.animation as animation
         self.fig, self.ax = plt.subplots()
         self.xdata, self.ydata = [], []
@@ -456,7 +457,7 @@ class TestNetworkLossAnimation(object):
         ani = animation.FuncAnimation(
             fig=self.fig,
             func=self.run,
-            frames=partial(self.data_gen, a_network),
+            frames=partial(self.data_gen, a_network, some_classify_circle_data),
             blit=False,
             interval=10,
             repeat=False,

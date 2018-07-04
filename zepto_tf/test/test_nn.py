@@ -27,8 +27,7 @@ TRAIN_SPLIT         =  0.50
 PLOT_PAUSE          =  0.10
 DRAWNOW_INTERVAL    =   100
 BATCH_SIZE          =    10
-LEARNING_RATE       = 0.001
-REGULARIZATION_RATE =  0.01
+MAX_ROLLOUTS        =  3000
 
 
 #  ___       _          ___      _
@@ -180,7 +179,6 @@ def make_data_sets(xs, func, num_examples, train_split):
     return trainx, func(trainx), validx, func(validx)
 
 
-
 #  ___ _     _   _   _
 # | _ \ |___| |_| |_(_)_ _  __ _
 # |  _/ / _ \  _|  _| | ' \/ _` |
@@ -190,7 +188,18 @@ def make_data_sets(xs, func, num_examples, train_split):
 
 # PyCharm unnecessarily greys-out the following import.
 # This import is necessary lest "projection='3d'" be unknown below.
+
+
 from mpl_toolkits.mplot3d import Axes3D
+
+
+@pytest.fixture
+def some_classify_circle_data(num_examples):
+    """TODO: Parametrize noise."""
+    data = classify_circle_data(num_examples, noise=0.0)
+    np.random.shuffle(data)
+    result = classify_circle_train_test_split(num_examples, data)
+    return result
 
 
 def draw_2D_points(points: List[Example2D]) -> None:
@@ -202,16 +211,20 @@ def draw_2D_points(points: List[Example2D]) -> None:
     ax = fig.add_subplot(111, projection='3d')
     # the 'c=' is necessary lest 'cs' be ignored.
     ax.scatter(xs, ys, zs, c=cs)
-    plt.pause(PLOT_PAUSE)
+    # plt.pause(PLOT_PAUSE)
+    plt.pause(3.0)
     # plt.show()
 
 
 @pytest.mark.parametrize("noise", [0.10, 0.25, 0.50, 0.75, 1.0])
 def test_draw_classify_circle_data(num_examples, noise):
-    # See the following line in 'playground.ts': secret magic scaling of state.noise
+    # See the following line in 'playground.ts':  magic scaling of state.noise
     #   let data = generator(numSamples, state.noise / 100);
-    # We won't do that; we'll just let the noise be a number in units of the radius
-    draw_2D_points(classify_circle_data(num_examples, noise))
+    # We won't do that; we let the noise be a number in units of the radius
+    data = classify_circle_data(num_examples, noise)
+    split = classify_circle_train_test_split(num_examples, data)
+    draw_2D_points(data)
+    # draw_2D_points(split['training data'])
 
 
 @pytest.mark.skip('at present, not needed')
@@ -361,7 +374,7 @@ def test_regularization_function():
 
 @pytest.fixture
 def a_network():
-    nodes = nn.build_network(
+    relu_nodes = nn.build_network(
         network_shape=[2, 3, 2],
         activation=nn.ReluActivationFunction(),
         output_activation=nn.ReluActivationFunction(),
@@ -369,15 +382,20 @@ def a_network():
         input_ids=['x1', 'x2'],
         init_zero_q=False,  # True ~~> no change in loss
     )
-    return nodes
+    tanh_nodes = nn.build_network(
+        network_shape=[2, 3, 2],
+        activation=nn.TanhActivationFunction(),
+        output_activation=nn.TanhActivationFunction(),
+        regularization=nn.L2RegularizationFunction(),
+        input_ids=['x1', 'x2'],
+        init_zero_q=False,  # True ~~> no change in loss
+    )
+    return tanh_nodes
 
 
 @pytest.fixture
-def some_classify_circle_data(num_examples):
-    """TODO: Parametrize noise."""
-    data = classify_circle_data(num_examples, noise=0.25)
-    result = classify_circle_train_test_split(num_examples, data)
-    return result
+def some_rates():
+    return {'learning rate': 0.03, 'regularization rate': 0.0}
 
 
 def test_build_network(a_network):
@@ -396,9 +414,12 @@ def get_loss(network: List[List[nn.Node]], data: List[Example2D]) -> float:
 
 def classify_circle_train_one_step(
         network: List[List[nn.Node]],
-        some_classify_circle_data) -> Dict:
+        some_classify_circle_data,
+        some_rates) -> Dict:
     training_data = some_classify_circle_data['training data']
     testing_data = some_classify_circle_data['testing data']
+    learning_rate = some_rates['learning rate']
+    regularization_rate = some_rates['regularization rate']
     l = len(training_data)
     i = 0
     for d in training_data:
@@ -406,9 +427,9 @@ def classify_circle_train_one_step(
         nn.back_prop(network, d.label, nn.SquareErrorFunction())
         i += 1
         if i % BATCH_SIZE == 0 or i == l:
-            nn.update_weights(network, LEARNING_RATE, REGULARIZATION_RATE)
+            nn.update_weights(network, learning_rate, regularization_rate)
     result = {'training loss': get_loss(network, training_data),
-              'testing lost': get_loss(network, testing_data)}
+              'testing loss': get_loss(network, testing_data)}
     return result
 
 
@@ -419,18 +440,24 @@ from functools import partial
 class TestNetworkLossAnimation(object):
 
     @staticmethod
-    def data_gen(network, data, t=0):
+    def data_gen(network, data, rates, t=0):
         cnt = 0
-        while cnt < 10000:
+        while cnt < MAX_ROLLOUTS:
             cnt += 1
             t += 0.1
-            losses = classify_circle_train_one_step(network, data)
+            losses = classify_circle_train_one_step(network, data, rates)
             # yield t, np.sin(2 * np.pi * t) * np.exp(-t / 10.)
-            yield t, np.log10(losses['training loss'])
+            # yield t, np.log10(losses['training loss'])
+            yield t, losses['training loss']
+            yield t, losses['testing loss']
             # TODO: plot two lines!
 
     def init(self):
-        self.ax.set_ylim(-1.1, 1.1)
+        self.maxy = 1.1
+        self.miny = -1.1
+        self.ax.set_ylim(self.miny, self.maxy)
+        self.maxy = 0
+        self.miny = 0
         self.ax.set_xlim(0, 10)
         del self.xdata[:]
         del self.ydata[:]
@@ -439,16 +466,25 @@ class TestNetworkLossAnimation(object):
 
     def run(self, data):
         t, y = data
+        self.miny = min(y, self.miny)
+        self.maxy = max(y, self.maxy)
         self.xdata.append(t)
         self.ydata.append(y)
         xmin, xmax = self.ax.get_xlim()
         if t >= xmax:
+            dy = self.maxy - self.miny
+            self.ax.set_ylim(self.miny - 0.10 * dy, self.maxy + 0.10 * dy)
+            self.miny = 0
+            self.maxy = 0
             self.ax.set_xlim(xmin, 2 * xmax)
             self.ax.figure.canvas.draw()
         self.line.set_data(self.xdata, self.ydata)
         return self.line,
 
-    def test_another_animation(self, a_network, some_classify_circle_data):
+    def test_another_animation(self,
+                               a_network,
+                               some_classify_circle_data,
+                               some_rates):
         import matplotlib.animation as animation
         self.fig, self.ax = plt.subplots()
         self.xdata, self.ydata = [], []
@@ -457,9 +493,12 @@ class TestNetworkLossAnimation(object):
         _ = animation.FuncAnimation(  # must assign result to a var
             fig=self.fig,
             func=self.run,
-            frames=partial(self.data_gen, a_network, some_classify_circle_data),
+            frames=partial(self.data_gen,
+                           a_network,
+                           some_classify_circle_data,
+                           some_rates),
             blit=False,
-            interval=10,
+            interval=BATCH_SIZE,
             repeat=False,
             init_func=self.init
         )
